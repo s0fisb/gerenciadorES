@@ -104,7 +104,7 @@ class GerenciadorES:
         for dispositivo in self.dispositivos.values():
             usando = [p.pid for p in dispositivo.em_uso]
             esperando = [p.pid for p in dispositivo.fila]
-            print(f"D{dispositivo.identificador}: usando={usando} esperando={esperando}")
+            print(f"Dispositivo {dispositivo.identificador}: usando={usando} esperando={esperando}")
 
 # ==========================================================
 # GERENCIAMENTO DE MEMÓRIA
@@ -564,7 +564,7 @@ def ler_arquivo(nome_arquivo):
         partes = linhas[indice].split("|")
         dispositivos.append(
             DispositivoES(
-                int(partes[0]),
+                partes[0].strip(),
                 int(partes[1]),
                 int(partes[2])
             )
