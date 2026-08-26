@@ -104,7 +104,7 @@ class GerenciadorES:
         for dispositivo in self.dispositivos.values():
             usando = [p.pid for p in dispositivo.em_uso]
             esperando = [p.pid for p in dispositivo.fila]
-            print(f"D{dispositivo.identificador}: usando={usando} esperando={esperando}")
+            print(f"Dispositivo {dispositivo.identificador}: usando={usando} esperando={esperando}")
 
 # ==========================================================
 # GERENCIAMENTO DE MEMÓRIA
