@@ -564,7 +564,7 @@ def ler_arquivo(nome_arquivo):
         partes = linhas[indice].split("|")
         dispositivos.append(
             DispositivoES(
-                int(partes[0]),
+                partes[0].strip(),
                 int(partes[1]),
                 int(partes[2])
             )
