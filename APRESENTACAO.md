@@ -74,15 +74,8 @@ jeito que ficaria se já estivesse usando o dispositivo. Ele só volta a
 concorrer pela CPU quando o dispositivo terminar de atender e ele for o
 próximo da fila.
 
-**3. Um processo bloqueado pode ser escolhido pelo escalonador?**
-
-Não. Assim que o processo pede E/S, ele é retirado da estrutura do
-escalonador (método `retirar`). Ele só volta a fazer parte da disputa
-pela CPU quando a operação de E/S termina e o gerenciador de E/S chama
-`chegada` de novo para ele.
-
 **4. Por que existe um método `retirar` separado de `ao_terminar`, se os
-dois removem o processo do escalonador?**
+dois removem o processo do escalonador?** - talvez nao pergunte
 
 Porque as duas situações são diferentes para o escalonador de Prioridade
 e para o CFS. No caso da Prioridade, o processo escolhido para rodar
@@ -182,3 +175,24 @@ dos quatro algoritmos (FIFO, LRU, NUF, OPT) chega mais perto do resultado
 do OPT, que é o algoritmo ótimo usado como referência. Cada um roda numa
 simulação de memória separada, então o resultado de um não interfere no
 outro.
+
+Como o programa sabe, a cada instante, quanto tempo falta pra um dispositivo terminar de atender um processo?
+Cada processo tem um campo io_restante. Quando ele começa a usar um dispositivo, esse campo recebe o tempo de operação do dispositivo. A cada ciclo de tempo, o método avancar do dispositivo desconta 1 desse valor pra cada processo em uso, e quando chega a zero, o processo é liberado.
+
+4. Como funciona, na prática, o sorteio de se o processo vai pedir E/S, qual dispositivo e em que momento?
+São três sorteios separados, feitos assim que o processo é escolhido pra rodar. Primeiro sorteia um número de 1 a 100 e compara com a chance de E/S do processo, isso decide se ele vai pedir. Se for pedir, sorteia um dispositivo entre os que existem, e sorteia um número entre 1 e o tamanho da fatia (quantum), que vira o "momento" em que a E/S vai acontecer dentro daquela fatia.
+
+6. Como o programa impede que um processo bloqueado seja escolhido de novo pra CPU enquanto espera ou usa um dispositivo?
+No momento em que o processo pede E/S, ele é retirado da estrutura do escalonador (fila de prontos, heap de prioridade, etc), então ele fisicamente não está mais entre as opções que o escalonador pode escolher. Só volta pra lá quando o dispositivo libera ele.
+
+7. Como um processo volta a disputar CPU depois que termina a operação de E/S?
+O método avancar do gerenciador de E/S devolve a lista de quem terminou de usar o dispositivo naquele ciclo. Essa lista é usada pra recolocar cada processo de volta na estrutura do escalonador, do mesmo jeito que ele entraria se estivesse chegando pela primeira vez.
+
+8. Como é contado o tempo que o processo passa bloqueado, pronto e executando?
+São três contadores dentro do próprio processo. O tempo executando aumenta a cada ciclo real de CPU usado. O tempo pronto aumenta pra todo processo que está esperando na fila de prontos enquanto outro executa. O tempo bloqueado aumenta a cada ciclo em que o processo está esperando ou usando um dispositivo, contado separadamente do tempo de CPU.
+
+9. O que o programa faz quando não sobra nenhum processo pronto pra rodar, mas ainda tem gente bloqueada ou por chegar?
+Existe um caminho separado no código pra esse caso: o tempo avança sozinho, sem ninguém usando a CPU, só atualizando os dispositivos e checando se algum processo novo chega ou algum bloqueado libera, até que sobre alguém pronto de novo.
+
+12. Se dois processos pedem o mesmo dispositivo, um logo depois do outro, como o código garante que a ordem de chegada na fila é respeitada?
+Porque só um processo usa a CPU por vez, então os pedidos de E/S nunca acontecem literalmente ao mesmo tempo, sempre em instantes diferentes da simulação. Quem pede primeiro entra primeiro na fila, e o deque preserva essa ordem naturalmente.
