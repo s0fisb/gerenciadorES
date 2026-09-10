@@ -163,15 +163,15 @@ def construir_sequencia_futura(processos, algoritmo, quantum, frame_size):
     as requisita.
 
     Retorna (sequencia, offsets):
-      sequencia : list[int]      — IDs globais de página em ordem de acesso
-      offsets   : dict[pid, int] — deslocamento base de cada processo
+      sequencia : list[int]      : IDs globais de página em ordem de acesso
+      offsets   : dict[pid, int] : deslocamento base de cada processo
     """
     offsets = calcular_offsets(processos, frame_size)
     procs = copy.deepcopy(processos)
     pendentes = deque(sorted(procs, key=lambda p: p.start))
 
     classe = ALGORITMOS[algoritmo.upper()]
-    esc = classe(len(procs)) if classe is Loteria else classe()
+    esc = classe()
 
     sequencia = []
     t = 0
@@ -215,13 +215,13 @@ class MemoryManagerState:
     Estruturas
     -------------------
     tabela_processos : dict  pid -> {
-        tabela_paginas      : dict[int, int]  — página virtual -> frame físico
-        num_frames_alocados : int             — frames em uso por este processo
-        limite_frames       : int             — máximo permitido (percentual da VM)
+        tabela_paginas      : dict[int, int]  : página virtual -> frame físico
+        num_frames_alocados : int             : frames em uso por este processo
+        limite_frames       : int             : máximo permitido (percentual da VM)
     }
     tabela_frames : dict  frame -> (pid, página_virtual)
         Mapeamento inverso: dado um frame, recupera qual processo/página o ocupa.
-    memory : Memory — vetor físico (ilustrativo).
+    memory : Memory (vetor físico, usado só para ilustrar o conteúdo).
 
     Política local
         Cada processo recebe fatia exclusiva de frames e instância própria
@@ -271,7 +271,7 @@ class MemoryManagerState:
                 frame_offset += limite
         else:
             self.frames_livres = list(range(total_frames))
-            # Mapeamento reverso de ID global para (pid, página) — exclusivo da política global
+            # Mapeamento reverso de ID global para (pid, página), usado só na política global
             self.chave_para_pid_pag = {}
 
         self.algoritmo = algoritmo
@@ -427,7 +427,7 @@ class CPU:
             print(f"Algoritmo inválido. Opções válidas: {', '.join(ALGORITMOS.keys())}")
             sys.exit(1)
         classe = ALGORITMOS[codigo.upper()]
-        return classe(len(self.processos)) if classe is Loteria else classe()
+        return classe()
 
     def admitir_novo_processo(self):
         while self.pendentes and self.pendentes[0].start <= self.time:
@@ -457,10 +457,11 @@ class CPU:
         self.gerenciador_es.imprimir(self.processos)
 
     def executar_processo(self, processo):
+        # O estado já foi colocado em "executando" pelo chamador (run),
+        # antes da impressão do estado do sistema.
         if processo.start_time is None:
             processo.start_time = self.time
 
-        processo.estado = "executando"
         executado = 0
 
         vai_fazer_es = (
@@ -468,15 +469,13 @@ class CPU:
             and random.randint(1, 100) <= processo.chance_es
         )
 
+        # momento_es indica depois de quantos ciclos de CPU, dentro desta
+        # fatia, o processo vai pedir E/S. Pode valer até o próprio
+        # quantum, ou seja, o pedido pode acontecer só ao final da fatia.
         momento_es = random.randint(1, self.quantum) if vai_fazer_es else None
         dispositivo = self.gerenciador_es.escolher_dispositivo() if vai_fazer_es else None
 
         while executado < self.quantum and not processo.finished():
-            if momento_es is not None and executado == momento_es:
-                self.gerenciador_es.solicitar(processo, dispositivo.identificador)
-                self.imprimir_estado()
-                return executado
-
             pagina = processo.next_page()
             self.mem_manager.acessar(processo.pid, pagina)
 
@@ -493,6 +492,11 @@ class CPU:
             if processo.finished():
                 processo.estado = "terminado"
                 processo.finish_time = self.time
+                return executado
+
+            if momento_es is not None and executado == momento_es:
+                self.gerenciador_es.solicitar(processo, dispositivo.identificador)
+                self.imprimir_estado()
                 return executado
 
         processo.estado = "pronto"
@@ -519,16 +523,17 @@ class CPU:
                 continue
 
             processo = esc.selecionar()
+            processo.estado = "executando"
             self.imprimir_estado(processo)
 
             executado = self.executar_processo(processo)
+            esc.pos_execucao(processo, executado)
 
             if processo.finished():
                 esc.ao_terminar(processo)
             elif processo.estado == "bloqueado":
                 esc.retirar(processo)
             else:
-                esc.pos_execucao(processo, executado)
                 esc.apos_quantum(processo)
 
         for processo in self.processos:

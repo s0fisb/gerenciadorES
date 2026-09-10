@@ -25,7 +25,7 @@ Cada classe recebe `num_frames` (capacidade máxima) e expõe:
       usa essa informação, para manter o índice da sequência futura
       alinhado com a ordem real dos acessos.
 
-  swaps : int  — total de substituições (trocas) realizadas.
+  swaps : int  : total de substituições (trocas) realizadas.
 
 Para política local, `chave` é o número de página virtual (int).
 Para política global, `chave` é o ID global da página (int).
@@ -75,7 +75,7 @@ class AlgoritmoFIFO:
 
 class AlgoritmoLRU:
     """
-    Estrutura: OrderedDict — mantém as páginas em ordem de acesso mais recente.
+    Estrutura: OrderedDict, que mantém as páginas em ordem de acesso mais recente.
     Vítima: página menos recentemente usada (primeira do OrderedDict).
     No hit, move_to_end atualiza a recência.
     """
