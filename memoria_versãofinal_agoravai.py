@@ -171,7 +171,7 @@ def construir_sequencia_futura(processos, algoritmo, quantum, frame_size):
     pendentes = deque(sorted(procs, key=lambda p: p.start))
 
     classe = ALGORITMOS[algoritmo.upper()]
-    esc = classe()
+    esc = classe(len(procs)) if classe is Loteria else classe()
 
     sequencia = []
     t = 0
@@ -427,7 +427,7 @@ class CPU:
             print(f"Algoritmo inválido. Opções válidas: {', '.join(ALGORITMOS.keys())}")
             sys.exit(1)
         classe = ALGORITMOS[codigo.upper()]
-        return classe()
+        return classe(len(self.processos)) if classe is Loteria else classe()
 
     def admitir_novo_processo(self):
         while self.pendentes and self.pendentes[0].start <= self.time:
@@ -447,6 +447,8 @@ class CPU:
     def imprimir_estado(self, atual=None):
         if atual is not None:
             print(f"CPU: P{atual.pid}")
+        else:
+            print("CPU: nenhum processo em execução neste instante")
 
         prontos = [p for p in self.processos if p.estado == "pronto"]
         bloqueados = [p for p in self.processos if p.estado == "bloqueado"]
