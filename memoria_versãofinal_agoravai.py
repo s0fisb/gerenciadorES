@@ -1,4 +1,3 @@
-
 import os
 import sys
 import copy
@@ -105,10 +104,6 @@ class GerenciadorES:
             usando = [p.pid for p in dispositivo.em_uso]
             esperando = [p.pid for p in dispositivo.fila]
             print(f"Dispositivo {dispositivo.identificador}: usando={usando} esperando={esperando}")
-
-# ==========================================================
-# GERENCIAMENTO DE MEMÓRIA
-# ==========================================================
 
 class Memory:
     """
@@ -407,10 +402,6 @@ class MemoryManager:
         return tuple(self.sims[k].obter_trocas() for k in ('fifo', 'lru', 'nuf', 'opt'))
 
 
-# ==========================================================
-# CPU
-# ==========================================================
-
 class CPU:
     def __init__(self, quantum, algoritmo, processos, mem_manager, gerenciador_es):
         self.quantum = quantum
@@ -446,7 +437,7 @@ class CPU:
 
     def imprimir_estado(self, atual=None):
         if atual is not None:
-            print(f"CPU: P{atual.pid}")
+            print(f"CPU: P{atual.pid} restante={atual.remain_time}")
 
         prontos = [p for p in self.processos if p.estado == "pronto"]
         bloqueados = [p for p in self.processos if p.estado == "bloqueado"]
@@ -519,6 +510,7 @@ class CPU:
                 continue
 
             processo = esc.selecionar()
+            processo.estado = "executando"
             self.imprimir_estado(processo)
 
             executado = self.executar_processo(processo)
@@ -538,10 +530,6 @@ class CPU:
                 f"pronto={processo.waiting_time} "
                 f"bloqueado={processo.blocked_time}"
             )
-
-# ==========================================================
-# LEITURA DO ARQUIVO
-# ==========================================================
 
 def ler_arquivo(nome_arquivo):
     caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), nome_arquivo)
@@ -599,10 +587,6 @@ def clonar(processos):
     return [copy.deepcopy(p) for p in processos]
 
 
-# ==========================================================
-# SAÍDA
-# ==========================================================
-
 def imprimir_resultado_memoria(fifo, lru, nuf, opt):
     diffs = {'FIFO': abs(fifo - opt), 'LRU': abs(lru - opt), 'NUF': abs(nuf - opt)}
     minimo = min(diffs.values())
@@ -610,10 +594,6 @@ def imprimir_resultado_memoria(fifo, lru, nuf, opt):
     melhor = 'empate' if len(melhores) > 1 else melhores[0]
     print(f"{fifo}|{lru}|{nuf}|{opt}|{melhor}")
 
-
-# ==========================================================
-# MAIN
-# ==========================================================
 
 def main():
     if len(sys.argv) < 2:
