@@ -161,8 +161,15 @@ class Prioridade(Escalonador):
         heapq.heappush(self.estrut_dados, (processo.priority, self._ordem, processo))
         self._ordem += 1
 
+    def retirar(self, processo):
+        for item in self.estrut_dados:
+            if item[2] is processo:
+                self.estrut_dados.remove(item)
+                heapq.heapify(self.estrut_dados)
+                break
+
     def ao_terminar(self, processo):
-        heapq.heappop(self.estrut_dados)
+        self.retirar(processo)
 
 
 class Loteria(Escalonador):

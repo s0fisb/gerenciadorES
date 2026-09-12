@@ -2,6 +2,7 @@ import os
 import sys
 import copy
 import random
+import contextlib
 from collections import deque
 
 from escalonadores import RoundRobin, Prioridade, Loteria, CFS
@@ -151,11 +152,39 @@ def calcular_offsets(processos, frame_size):
     return offsets
 
 
-def construir_sequencia_futura(processos, algoritmo, quantum, frame_size):
+class _GravadorAcessos:
     """
-    Pré-simula o escalonamento (sem gerenciamento de memória) para obter
-    a sequência real de acessos a páginas na ordem em que o escalonador
-    as requisita.
+    Substitui o MemoryManager na pré-simulação: não toma nenhuma decisão de
+    substituição, só registra a ordem real (pid, página) em que os acessos
+    acontecem. Usado no lugar do gerenciamento de memória de verdade porque,
+    para descobrir a sequência futura, só precisamos da ordem de acesso — as
+    decisões de troca de página em si não afetam essa ordem.
+    """
+    def __init__(self, offsets):
+        self.offsets = offsets
+        self.sequencia = []
+
+    def acessar(self, pid, pagina):
+        if pagina is not None:
+            self.sequencia.append(self.offsets[pid] + pagina)
+
+
+def construir_sequencia_futura(processos, dispositivos, algoritmo, quantum, frame_size):
+    """
+    Pré-simula o escalonamento E a E/S para obter a sequência real de
+    acessos a páginas na ordem em que elas efetivamente acontecem.
+
+    A pré-simulação usa exatamente a mesma classe CPU/GerenciadorES da
+    simulação real, com cópias próprias de processos e dispositivos. Como a
+    E/S depende de sorteios aleatórios (se pede E/S, qual dispositivo, em
+    que momento), o estado do gerador de números aleatórios é salvo antes
+    da pré-simulação e restaurado logo depois — assim, a simulação real (que
+    roda em seguida) sorteia exatamente os mesmos valores e reproduz
+    exatamente a mesma ordem de acessos que foi pré-calculada aqui. Sem
+    isso, um processo bloqueando por E/S mudaria qual processo roda em
+    seguida, e a sequência pré-calculada deixaria de bater com a real —
+    fazendo o OPT tomar decisões erradas (podendo, inclusive, fazer mais
+    trocas que algoritmos não-ótimos).
 
     Retorna (sequencia, offsets):
       sequencia : list[int]      — IDs globais de página em ordem de acesso
@@ -163,44 +192,18 @@ def construir_sequencia_futura(processos, algoritmo, quantum, frame_size):
     """
     offsets = calcular_offsets(processos, frame_size)
     procs = copy.deepcopy(processos)
-    pendentes = deque(sorted(procs, key=lambda p: p.start))
+    disp_copia = copy.deepcopy(dispositivos)
 
-    classe = ALGORITMOS[algoritmo.upper()]
-    esc = classe(len(procs)) if classe is Loteria else classe()
+    gravador = _GravadorAcessos(offsets)
+    gerenciador_es = GerenciadorES(disp_copia)
+    cpu = CPU(quantum, algoritmo, procs, gravador, gerenciador_es)
 
-    sequencia = []
-    t = 0
+    estado_aleatorio = random.getstate()
+    with open(os.devnull, "w") as nulo, contextlib.redirect_stdout(nulo):
+        cpu.run()
+    random.setstate(estado_aleatorio)
 
-    while True:
-        while pendentes and pendentes[0].start <= t:
-            esc.chegada(pendentes.popleft())
-
-        if not esc.estrut_dados:
-            if not pendentes:
-                break
-            t = pendentes[0].start
-            continue
-
-        processo = esc.selecionar()
-        executado = 0
-        while executado < quantum and not processo.finished():
-            pagina = processo.next_page()
-            if pagina is not None:
-                sequencia.append(offsets[processo.pid] + pagina)
-            processo.remain_time -= 1
-            executado += 1
-
-        esc.pos_execucao(processo, executado)
-        esc.incrementar_espera(processo, executado)
-        t += executado
-
-        if processo.finished():
-            processo.finish_time = t
-            esc.ao_terminar(processo)
-        else:
-            esc.apos_quantum(processo)
-
-    return sequencia, offsets
+    return gravador.sequencia, offsets
 
 
 class MemoryManagerState:
@@ -353,7 +356,7 @@ class MemoryManager:
                       escalonamento, refletindo a ordem real de execução.
     """
     def __init__(self, politica, tam_memoria, frame_size, percentual,
-                 processos, algoritmo=None, quantum=None):
+                 processos, dispositivos=None, algoritmo=None, quantum=None):
         self.politica = politica
         self.frame_size = frame_size
         self.percentual = percentual
@@ -374,9 +377,9 @@ class MemoryManager:
             common = dict(politica=politica, total_frames=self.total_frames,
                           processos=processos, frame_size=frame_size, percentual=percentual)
         else:
-            # Pré-simula o escalonamento para obter a ordem real de acessos
+            # Pré-simula o escalonamento e a E/S para obter a ordem real de acessos
             sequencia, offsets = construir_sequencia_futura(
-                processos, algoritmo, quantum, frame_size)
+                processos, dispositivos or [], algoritmo, quantum, frame_size)
             algos = {
                 'fifo': AlgoritmoFIFO(self.total_frames),
                 'lru':  AlgoritmoLRU(self.total_frames),
@@ -518,6 +521,7 @@ class CPU:
             if processo.finished():
                 esc.ao_terminar(processo)
             elif processo.estado == "bloqueado":
+                esc.pos_execucao(processo, executado)
                 esc.retirar(processo)
             else:
                 esc.pos_execucao(processo, executado)
@@ -612,6 +616,7 @@ def main():
         tamanho_pagina,
         percentual_alocacao,
         processos,
+        dispositivos=dispositivos,
         algoritmo=algoritmo,
         quantum=fatia
     )
