@@ -463,11 +463,6 @@ class CPU:
         dispositivo = self.gerenciador_es.escolher_dispositivo() if vai_fazer_es else None
 
         while executado < self.quantum and not processo.finished():
-            if momento_es is not None and executado == momento_es:
-                self.gerenciador_es.solicitar(processo, dispositivo.identificador)
-                self.imprimir_estado()
-                return executado
-
             pagina = processo.next_page()
             self.mem_manager.acessar(processo.pid, pagina)
 
@@ -484,6 +479,11 @@ class CPU:
             if processo.finished():
                 processo.estado = "terminado"
                 processo.finish_time = self.time
+                return executado
+
+            if momento_es is not None and executado == momento_es:
+                self.gerenciador_es.solicitar(processo, dispositivo.identificador)
+                self.imprimir_estado()
                 return executado
 
         processo.estado = "pronto"

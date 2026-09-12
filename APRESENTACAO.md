@@ -10,9 +10,10 @@ antes, adicionando um gerenciador de entrada e saída. Agora, enquanto um
 processo está usando a CPU, ele pode pedir uma operação de E/S. Se pedir,
 ele fica bloqueado até o dispositivo atender."
 
-Mostrar rapidamente os arquivos: `simulador.py` (processo, CPU, E/S e
-memória), `escalonadores.py` (algoritmos de escalonamento),
-`substituidores.py` (algoritmos de substituição de página).
+Mostrar rapidamente os arquivos: `memoria_versãofinal_agoravai.py`
+(processo, CPU, E/S e memória), `escalonadores.py` (algoritmos de
+escalonamento), `substituidores.py` (algoritmos de substituição de
+página).
 
 ## 2. Mostrar o arquivo de entrada (2 minutos)
 
@@ -23,7 +24,7 @@ lista de dispositivos, lista de processos. Apontar o campo
 ## 3. Rodar o programa (3 a 5 minutos)
 
 ```
-python3 simulador.py entrada_ES.txt
+python3 "memoria_versãofinal_agoravai.py" entrada_ES.txt
 ```
 
 Ir apontando na tela:
@@ -121,17 +122,27 @@ processo está na CPU a cada momento). Então não existe empate real nesse
 sentido. Quem pedir primeiro tem preferência para a vaga, e quem pedir
 depois entra na fila se não sobrar vaga.
 
-**9. Por que vocês trocaram a estrutura de dados da Loteria e do CFS?**
+**9. Por que a Loteria usa uma árvore de Fenwick e o CFS usa uma árvore rubro-negra?**
 
-A versão anterior usava uma árvore de Fenwick para a Loteria e uma árvore
-rubro-negra (biblioteca externa) para o CFS. Essas estruturas deixavam o
-código mais difícil de explicar sem ganho real de desempenho para o
-tamanho dos casos de teste do trabalho, e a árvore rubro-negra dependia
-de uma biblioteca que não vem instalada por padrão no Python, o que é
-arriscado num ambiente de correção. Trocamos por uma soma simples de
-bilhetes para a Loteria e por uma fila de prioridade comum (heap da
-biblioteca padrão) para o CFS, que fazem exatamente a mesma coisa de um
-jeito mais direto de explicar.
+Para o tamanho dos casos de teste do trabalho, uma lista simples resolveria
+os dois escalonadores sem diferença visível no resultado. Escolhemos essas
+estruturas mesmo assim porque o objetivo é que o simulador se aproxime do
+que um sistema operacional real faz, não só do resultado final:
+
+- Na Loteria, sortear um bilhete exigiria percorrer a lista de processos
+  somando bilhetes até passar do número sorteado (custo linear). A árvore
+  de Fenwick guarda somas parciais e permite achar "quem tem o bilhete k"
+  em tempo logarítmico, o que é a forma eficiente de implementar esse
+  sorteio quando o número de processos cresce.
+- No CFS, a árvore rubro-negra não é um detalhe de implementação nosso: é
+  literalmente a estrutura de dados que o CFS do kernel Linux usa para
+  guardar os processos ordenados por `vruntime` e encontrar o menor valor
+  em tempo logarítmico. Usar uma fila de prioridade comum (heap) até
+  funcionaria aqui, mas não seria fiel ao mecanismo real que o CFS emula.
+
+A biblioteca `bintrees` é uma dependência externa (não vem com o Python por
+padrão) e precisa ser instalada com `pip install bintrees` antes de rodar o
+programa — isso está listado nas instruções de uso.
 
 **10. Como funciona o CFS aqui?**
 

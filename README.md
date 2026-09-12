@@ -1,3 +1,21 @@
+# Como executar
+
+Dependências: Python 3 e a biblioteca `bintrees` (usada para a árvore
+rubro-negra do escalonador CFS, mesma estrutura que o CFS real do Linux
+usa). Instale com:
+
+```
+pip install -r requirements.txt
+```
+
+Para rodar a simulação:
+
+```
+python "memoria_versãofinal_agoravai.py" entrada_ES.txt
+```
+
+O primeiro argumento é o arquivo de entrada, no formato descrito abaixo.
+
 # Instruções do trabalho 
 > É exatamente igual ao que tá no ava
 

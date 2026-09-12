@@ -89,21 +89,25 @@ meio da sua estrutura, não só do começo ou do topo.
   identidade dele dentro do heap, em vez de simplesmente tirar o que
   estiver no topo naquele momento.
 - **Loteria**: cada processo tem uma quantidade de bilhetes igual à sua
-  prioridade. Para sortear, soma-se todos os bilhetes, sorteia-se um
-  número entre 1 e essa soma, e percorre-se a lista de processos somando
-  os bilhetes até passar do número sorteado. É uma implementação direta,
-  sem estrutura de dados especial.
+  prioridade. Os bilhetes ficam guardados numa árvore de Fenwick (Binary
+  Indexed Tree, classe `FenwickTree`), que mantém somas parciais dos
+  bilhetes. Para sortear, sorteia-se um número entre 1 e o total de
+  bilhetes e a árvore encontra "de quem é o bilhete k" em tempo
+  logarítmico (`find_kth`), em vez de percorrer a lista de processos um
+  por um. Isso é o que permite o sorteio continuar rápido mesmo com muitos
+  processos.
 - **CFS**: versão simplificada do escalonador do Linux. Cada processo tem
   um `virtual_runtime`, que cresce conforme ele usa CPU (multiplicado
   pela prioridade, que funciona como peso). O escalonador sempre escolhe
-  quem tem o menor `virtual_runtime`, também usando uma fila de
-  prioridade (heap). Aqui, diferente da Prioridade, o `selecionar` já
-  remove o processo do heap, porque a ordem de escolha não muda durante a
-  execução do processo (o heap só volta a mudar depois que ele terminar
-  a fatia ou bloquear).
+  quem tem o menor `virtual_runtime`, guardado numa árvore rubro-negra
+  (`RBTree`, da biblioteca `bintrees`) — a mesma estrutura de dados que o
+  CFS real do kernel Linux usa para isso. Aqui, diferente da Prioridade, o
+  `selecionar` já remove o processo da árvore, porque a ordem de escolha
+  não muda durante a execução do processo (a árvore só volta a mudar
+  depois que ele terminar a fatia ou bloquear).
 
 ## Gerenciador de memória (`substituidores.py` e a parte de memória do
-`simulador.py`)
+`memoria_versãofinal_agoravai.py`)
 
 Essa parte não mudou desde o trabalho anterior. Os quatro algoritmos de
 substituição (FIFO, LRU, NUF, OPT) rodam em paralelo, cada um com sua

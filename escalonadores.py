@@ -41,11 +41,10 @@ class LotteryQueue:
         self._ft = FenwickTree(n)
         self._slots = [None] * n
         self._pid_slot = {}
-        self._next = 0
+        self._livres = list(range(n))
 
     def add(self, p):
-        slot = self._next
-        self._next += 1
+        slot = self._livres.pop()
         self._slots[slot] = p
         self._pid_slot[p.pid] = slot
         self._ft.update(slot, p.priority)
@@ -58,6 +57,7 @@ class LotteryQueue:
         slot = self._pid_slot.pop(p.pid)
         self._slots[slot] = None
         self._ft.update(slot, -p.priority)
+        self._livres.append(slot)
 
     def __iter__(self):
         return (p for p in self._slots if p is not None)
