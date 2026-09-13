@@ -1,8 +1,8 @@
-
 import os
 import sys
 import copy
 import random
+import contextlib
 from collections import deque
 
 from escalonadores import RoundRobin, Prioridade, Loteria, CFS
@@ -99,16 +99,23 @@ class GerenciadorES:
     def escolher_dispositivo(self):
         return random.choice(list(self.dispositivos.values()))
 
-    def imprimir(self, processos):
+    def imprimir(self):
         print("Dispositivos:")
         for dispositivo in self.dispositivos.values():
             usando = [p.pid for p in dispositivo.em_uso]
             esperando = [p.pid for p in dispositivo.fila]
-            print(f"Dispositivo {dispositivo.identificador}: usando={usando} esperando={esperando}")
 
-# ==========================================================
-# GERENCIAMENTO DE MEMÓRIA
-# ==========================================================
+            if not usando:
+                estado = "livre"
+            elif len(usando) < dispositivo.usos_simultaneos:
+                estado = "parcialmente ocupado"
+            else:
+                estado = "ocupado"
+
+            rotulo = f"  {dispositivo.identificador} [{estado}]"
+            usando_txt = "[" + ", ".join(f"P{pid}" for pid in usando) + "]"
+            esperando_txt = "[" + ", ".join(f"P{pid}" for pid in esperando) + "]"
+            print(f"{rotulo.ljust(35)} usando={usando_txt}  esperando={esperando_txt}")
 
 class Memory:
     """
@@ -156,11 +163,39 @@ def calcular_offsets(processos, frame_size):
     return offsets
 
 
-def construir_sequencia_futura(processos, algoritmo, quantum, frame_size):
+class _GravadorAcessos:
     """
-    Pré-simula o escalonamento (sem gerenciamento de memória) para obter
-    a sequência real de acessos a páginas na ordem em que o escalonador
-    as requisita.
+    Substitui o MemoryManager na pré-simulação: não toma nenhuma decisão de
+    substituição, só registra a ordem real (pid, página) em que os acessos
+    acontecem. Usado no lugar do gerenciamento de memória de verdade porque,
+    para descobrir a sequência futura, só precisamos da ordem de acesso — as
+    decisões de troca de página em si não afetam essa ordem.
+    """
+    def __init__(self, offsets):
+        self.offsets = offsets
+        self.sequencia = []
+
+    def acessar(self, pid, pagina):
+        if pagina is not None:
+            self.sequencia.append(self.offsets[pid] + pagina)
+
+
+def construir_sequencia_futura(processos, dispositivos, algoritmo, quantum, frame_size):
+    """
+    Pré-simula o escalonamento E a E/S para obter a sequência real de
+    acessos a páginas na ordem em que elas efetivamente acontecem.
+
+    A pré-simulação usa exatamente a mesma classe CPU/GerenciadorES da
+    simulação real, com cópias próprias de processos e dispositivos. Como a
+    E/S depende de sorteios aleatórios (se pede E/S, qual dispositivo, em
+    que momento), o estado do gerador de números aleatórios é salvo antes
+    da pré-simulação e restaurado logo depois — assim, a simulação real (que
+    roda em seguida) sorteia exatamente os mesmos valores e reproduz
+    exatamente a mesma ordem de acessos que foi pré-calculada aqui. Sem
+    isso, um processo bloqueando por E/S mudaria qual processo roda em
+    seguida, e a sequência pré-calculada deixaria de bater com a real —
+    fazendo o OPT tomar decisões erradas (podendo, inclusive, fazer mais
+    trocas que algoritmos não-ótimos).
 
     Retorna (sequencia, offsets):
       sequencia : list[int]      — IDs globais de página em ordem de acesso
@@ -168,44 +203,18 @@ def construir_sequencia_futura(processos, algoritmo, quantum, frame_size):
     """
     offsets = calcular_offsets(processos, frame_size)
     procs = copy.deepcopy(processos)
-    pendentes = deque(sorted(procs, key=lambda p: p.start))
+    disp_copia = copy.deepcopy(dispositivos)
 
-    classe = ALGORITMOS[algoritmo.upper()]
-    esc = classe(len(procs)) if classe is Loteria else classe()
+    gravador = _GravadorAcessos(offsets)
+    gerenciador_es = GerenciadorES(disp_copia)
+    cpu = CPU(quantum, algoritmo, procs, gravador, gerenciador_es)
 
-    sequencia = []
-    t = 0
+    estado_aleatorio = random.getstate()
+    with open(os.devnull, "w") as nulo, contextlib.redirect_stdout(nulo):
+        cpu.run()
+    random.setstate(estado_aleatorio)
 
-    while True:
-        while pendentes and pendentes[0].start <= t:
-            esc.chegada(pendentes.popleft())
-
-        if not esc.estrut_dados:
-            if not pendentes:
-                break
-            t = pendentes[0].start
-            continue
-
-        processo = esc.selecionar()
-        executado = 0
-        while executado < quantum and not processo.finished():
-            pagina = processo.next_page()
-            if pagina is not None:
-                sequencia.append(offsets[processo.pid] + pagina)
-            processo.remain_time -= 1
-            executado += 1
-
-        esc.pos_execucao(processo, executado)
-        esc.incrementar_espera(processo, executado)
-        t += executado
-
-        if processo.finished():
-            processo.finish_time = t
-            esc.ao_terminar(processo)
-        else:
-            esc.apos_quantum(processo)
-
-    return sequencia, offsets
+    return gravador.sequencia, offsets
 
 
 class MemoryManagerState:
@@ -358,7 +367,7 @@ class MemoryManager:
                       escalonamento, refletindo a ordem real de execução.
     """
     def __init__(self, politica, tam_memoria, frame_size, percentual,
-                 processos, algoritmo=None, quantum=None):
+                 processos, dispositivos=None, algoritmo=None, quantum=None):
         self.politica = politica
         self.frame_size = frame_size
         self.percentual = percentual
@@ -379,9 +388,9 @@ class MemoryManager:
             common = dict(politica=politica, total_frames=self.total_frames,
                           processos=processos, frame_size=frame_size, percentual=percentual)
         else:
-            # Pré-simula o escalonamento para obter a ordem real de acessos
+            # Pré-simula o escalonamento e a E/S para obter a ordem real de acessos
             sequencia, offsets = construir_sequencia_futura(
-                processos, algoritmo, quantum, frame_size)
+                processos, dispositivos or [], algoritmo, quantum, frame_size)
             algos = {
                 'fifo': AlgoritmoFIFO(self.total_frames),
                 'lru':  AlgoritmoLRU(self.total_frames),
@@ -406,10 +415,6 @@ class MemoryManager:
         """Retorna (trocas_fifo, trocas_lru, trocas_nuf, trocas_opt)."""
         return tuple(self.sims[k].obter_trocas() for k in ('fifo', 'lru', 'nuf', 'opt'))
 
-
-# ==========================================================
-# CPU
-# ==========================================================
 
 class CPU:
     def __init__(self, quantum, algoritmo, processos, mem_manager, gerenciador_es):
@@ -444,17 +449,29 @@ class CPU:
         for processo in prontos:
             self.escalonador.chegada(processo)
 
-    def imprimir_estado(self, atual=None):
-        if atual is not None:
-            print(f"CPU: P{atual.pid}")
+    def imprimir_estado(self, atual):
+        titulo = f" t={self.time} — P{atual.pid} assume a CPU "
+        largura = max(70, len(titulo) + 10)
+        esquerda = (largura - len(titulo)) // 2
+        direita = largura - len(titulo) - esquerda
+        print("─" * esquerda + titulo + "─" * direita)
 
         prontos = [p for p in self.processos if p.estado == "pronto"]
         bloqueados = [p for p in self.processos if p.estado == "bloqueado"]
 
-        print("Prontos:", [(p.pid, p.remain_time) for p in prontos])
-        print("Bloqueados:",
-              [(p.pid, p.remain_time, p.dispositivo) for p in bloqueados])
-        self.gerenciador_es.imprimir(self.processos)
+        print(f"Executando : P{atual.pid} (restante={atual.remain_time})")
+        print("Prontos    :", self._formatar_lista(
+            f"P{p.pid}(restante={p.remain_time})" for p in prontos))
+        print("Bloqueados :", self._formatar_lista(
+            f"P{p.pid}(restante={p.remain_time}, {p.dispositivo})" for p in bloqueados))
+        print()
+        self.gerenciador_es.imprimir()
+        print()
+
+    @staticmethod
+    def _formatar_lista(itens):
+        itens = list(itens)
+        return "  ".join(itens) if itens else "(nenhum)"
 
     def executar_processo(self, processo):
         if processo.start_time is None:
@@ -472,11 +489,6 @@ class CPU:
         dispositivo = self.gerenciador_es.escolher_dispositivo() if vai_fazer_es else None
 
         while executado < self.quantum and not processo.finished():
-            if momento_es is not None and executado == momento_es:
-                self.gerenciador_es.solicitar(processo, dispositivo.identificador)
-                self.imprimir_estado()
-                return executado
-
             pagina = processo.next_page()
             self.mem_manager.acessar(processo.pid, pagina)
 
@@ -493,6 +505,10 @@ class CPU:
             if processo.finished():
                 processo.estado = "terminado"
                 processo.finish_time = self.time
+                return executado
+
+            if momento_es is not None and executado == momento_es:
+                self.gerenciador_es.solicitar(processo, dispositivo.identificador)
                 return executado
 
         processo.estado = "pronto"
@@ -519,6 +535,7 @@ class CPU:
                 continue
 
             processo = esc.selecionar()
+            processo.estado = "executando"
             self.imprimir_estado(processo)
 
             executado = self.executar_processo(processo)
@@ -526,6 +543,7 @@ class CPU:
             if processo.finished():
                 esc.ao_terminar(processo)
             elif processo.estado == "bloqueado":
+                esc.pos_execucao(processo, executado)
                 esc.retirar(processo)
             else:
                 esc.pos_execucao(processo, executado)
@@ -538,10 +556,6 @@ class CPU:
                 f"pronto={processo.waiting_time} "
                 f"bloqueado={processo.blocked_time}"
             )
-
-# ==========================================================
-# LEITURA DO ARQUIVO
-# ==========================================================
 
 def ler_arquivo(nome_arquivo):
     caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), nome_arquivo)
@@ -599,10 +613,6 @@ def clonar(processos):
     return [copy.deepcopy(p) for p in processos]
 
 
-# ==========================================================
-# SAÍDA
-# ==========================================================
-
 def imprimir_resultado_memoria(fifo, lru, nuf, opt):
     diffs = {'FIFO': abs(fifo - opt), 'LRU': abs(lru - opt), 'NUF': abs(nuf - opt)}
     minimo = min(diffs.values())
@@ -610,10 +620,6 @@ def imprimir_resultado_memoria(fifo, lru, nuf, opt):
     melhor = 'empate' if len(melhores) > 1 else melhores[0]
     print(f"{fifo}|{lru}|{nuf}|{opt}|{melhor}")
 
-
-# ==========================================================
-# MAIN
-# ==========================================================
 
 def main():
     if len(sys.argv) < 2:
@@ -632,6 +638,7 @@ def main():
         tamanho_pagina,
         percentual_alocacao,
         processos,
+        dispositivos=dispositivos,
         algoritmo=algoritmo,
         quantum=fatia
     )

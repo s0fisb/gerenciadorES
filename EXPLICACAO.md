@@ -89,21 +89,25 @@ meio da sua estrutura, não só do começo ou do topo.
   identidade dele dentro do heap, em vez de simplesmente tirar o que
   estiver no topo naquele momento.
 - **Loteria**: cada processo tem uma quantidade de bilhetes igual à sua
-  prioridade. Para sortear, soma-se todos os bilhetes, sorteia-se um
-  número entre 1 e essa soma, e percorre-se a lista de processos somando
-  os bilhetes até passar do número sorteado. É uma implementação direta,
-  sem estrutura de dados especial.
+  prioridade. Os bilhetes ficam guardados numa árvore de Fenwick (Binary
+  Indexed Tree, classe `FenwickTree`), que mantém somas parciais dos
+  bilhetes. Para sortear, sorteia-se um número entre 1 e o total de
+  bilhetes e a árvore encontra "de quem é o bilhete k" em tempo
+  logarítmico (`find_kth`), em vez de percorrer a lista de processos um
+  por um. Isso é o que permite o sorteio continuar rápido mesmo com muitos
+  processos.
 - **CFS**: versão simplificada do escalonador do Linux. Cada processo tem
   um `virtual_runtime`, que cresce conforme ele usa CPU (multiplicado
   pela prioridade, que funciona como peso). O escalonador sempre escolhe
-  quem tem o menor `virtual_runtime`, também usando uma fila de
-  prioridade (heap). Aqui, diferente da Prioridade, o `selecionar` já
-  remove o processo do heap, porque a ordem de escolha não muda durante a
-  execução do processo (o heap só volta a mudar depois que ele terminar
-  a fatia ou bloquear).
+  quem tem o menor `virtual_runtime`, guardado numa árvore rubro-negra
+  (`RBTree`, da biblioteca `bintrees`) — a mesma estrutura de dados que o
+  CFS real do kernel Linux usa para isso. Aqui, diferente da Prioridade, o
+  `selecionar` já remove o processo da árvore, porque a ordem de escolha
+  não muda durante a execução do processo (a árvore só volta a mudar
+  depois que ele terminar a fatia ou bloquear).
 
 ## Gerenciador de memória (`substituidores.py` e a parte de memória do
-`simulador.py`)
+`memoria_versãofinal_agoravai.py`)
 
 Essa parte não mudou desde o trabalho anterior. Os quatro algoritmos de
 substituição (FIFO, LRU, NUF, OPT) rodam em paralelo, cada um com sua
@@ -142,15 +146,28 @@ feito nessa ordem, o processo apareceria ao mesmo tempo como "CPU: Pn" e
 na lista de prontos, porque ainda estaria com o estado antigo no momento
 da impressão.
 
-## Uma simplificação assumida (caso o professor pergunte)
+## Por que a pré-simulação do OPT também precisa simular a E/S
 
 Na política global de memória, o algoritmo OPT (ótimo) decide qual página
 remover olhando para uma simulação prévia da ordem em que as páginas
-serão acessadas. Essa simulação prévia não leva em conta as pausas
-causadas pela E/S, porque a ordem de acesso a páginas em si não muda com
-a E/S, só o momento no tempo real em que cada acesso acontece. Ou seja, o
-OPT continua decidindo com base na sequência real de acessos, só não
-sabe exatamente quantas unidades de tempo real vão se passar entre um
-acesso e outro por causa da E/S. Isso não muda o resultado do algoritmo
-OPT nem gera inconsistência, é só uma observação sobre como a
-pré-simulação foi construída.
+serão acessadas (`construir_sequencia_futura`). Essa pré-simulação roda o
+mesmo escalonamento e a mesma E/S que a simulação real vai rodar depois —
+e não só o escalonamento, como numa versão anterior.
+
+O motivo é que a E/S muda quem executa em seguida, não só o instante no
+relógio: um processo pode bloquear no meio da fatia e ceder a CPU mais
+cedo do que cederia sem E/S, adiantando a vez de outro processo. Isso
+muda a ordem em que os acessos de processos diferentes se intercalam.
+Se a pré-simulação ignorasse a E/S, o OPT decidiria vítimas com base
+numa sequência futura que não é a que realmente vai acontecer — e nesse
+caso o OPT deixa de ser garantidamente ótimo, podendo inclusive fazer
+mais trocas que um algoritmo não-ótimo (o que não faz sentido para uma
+referência "ótima").
+
+Para a pré-simulação reproduzir exatamente a mesma sequência de acessos
+que a simulação real, os sorteios de E/S (se o processo pede E/S, qual
+dispositivo, em que momento da fatia) precisam ser os mesmos nas duas.
+Por isso o estado do gerador de números aleatórios é salvo antes da
+pré-simulação e restaurado logo depois: a simulação real, que roda em
+seguida, sorteia exatamente os mesmos valores e caminha pelos mesmos
+eventos, então a sequência pré-calculada bate com a real.
