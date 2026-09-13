@@ -270,7 +270,24 @@ processo pronto que não é o que está executando; `blocked_time` aumenta a
 cada ciclo em que o processo está com estado "bloqueado" — usando ou
 esperando um dispositivo, não importa qual dos dois.
 
-**19. O tempo que o processo passa na fila de espera de um dispositivo
+**19. No resumo final de cada processo, vocês mostram tempo total, tempo
+pronto e tempo bloqueado. Como cada um desses três valores é contado
+durante a simulação, e o que garante que a soma dos três bate com o
+tempo total?**
+
+A contagem é a mesma da pergunta anterior: `running_time`,
+`waiting_time` e `blocked_time`, cada um incrementado por um mecanismo
+diferente (execução real, `incrementar_espera`, `atualizar_bloqueados`).
+Mas o que **garante** a soma bater não é a fórmula em si, é uma
+invariante de desenho da simulação: a cada unidade de tempo, o processo
+está em exatamente um desses três estados — nunca em zero, nunca em mais
+de um. Executando, pronto e bloqueado se excluem mutuamente a cada
+ciclo, e cada ciclo incrementa exatamente um dos três contadores. Como
+os três casos cobrem tudo que pode acontecer com um processo entre a
+criação e o término, e nunca se sobrepõem, a soma dos três é, por
+construção, igual ao tempo total (`finish_time - start`).
+
+**20. O tempo que o processo passa na fila de espera de um dispositivo
 (antes de começar a ser atendido) conta como bloqueado ou como outra
 categoria?**
 
@@ -280,7 +297,7 @@ categoria separada pra "esperando o dispositivo ficar livre". Por isso o
 processo já entra com `estado = "bloqueado"` no momento do pedido, esteja
 ele em uso ou só na fila.
 
-**20. O que aconteceria se dois processos pedissem o mesmo dispositivo no
+**21. O que aconteceria se dois processos pedissem o mesmo dispositivo no
 mesmo instante de tempo?**
 
 Não existe empate real: a simulação processa um ciclo de CPU de um
@@ -290,7 +307,7 @@ sempre em instantes diferentes da simulação. Quem pede primeiro tem
 preferência pela vaga; quem pede depois entra atrás na fila, e o `deque`
 preserva essa ordem de chegada naturalmente.
 
-**21. O que acontece se o arquivo de entrada tiver zero dispositivos de
+**22. O que acontece se o arquivo de entrada tiver zero dispositivos de
 E/S?**
 
 O programa funciona normalmente, como nos trabalhos anteriores: nenhum
@@ -301,7 +318,7 @@ o programa.
 
 ## Saída na tela
 
-**22. O que aparece na tela a cada troca de processo na CPU?**
+**23. O que aparece na tela a cada troca de processo na CPU?**
 
 Um painel: um título com o relógio da simulação e quem assumiu a CPU
 (`t=<tempo> — Pn assume a CPU`), a linha "Executando" com o tempo
@@ -310,7 +327,7 @@ cada um (e o dispositivo, para os bloqueados), e a lista de dispositivos
 com estado (livre / parcialmente ocupado / ocupado) e quem está usando ou
 esperando cada um.
 
-**23. O painel aparece só quando um processo novo assume a CPU, ou também
+**24. O painel aparece só quando um processo novo assume a CPU, ou também
 no meio da fatia (por exemplo, quando alguém bloqueia por E/S antes de
 terminar o quantum)?**
 
@@ -321,3 +338,48 @@ próximo painel; não existe um painel extra só pra marcar o bloqueio. Isso
 segue literalmente o enunciado ("a cada vez que for trocar o processo em
 execução"), e a informação de quem bloqueou não se perde: ela aparece no
 próximo painel, na lista de bloqueados.
+
+---
+
+# Chance de cada pergunta cair na arguição
+
+O professor disse que faz só 4 perguntas, as mesmas pra todo grupo, focadas
+em como a E/S foi implementada (não em escalonador/memória puros, já
+avaliados em bimestres anteriores). A tabela abaixo ordena as 25 perguntas
+acima da mais pra menos provável de estar entre essas 4, com o motivo.
+
+Critério: prioridade pra pergunta que mapeia direto numa frase do
+enunciado e é fácil de checar em qualquer grupo, independente de detalhe
+de implementação. Perguntas que são mais sobre "onde no código" do que
+"por quê", ou que dependem de uma escolha específica de vocês (não do
+enunciado), ficam mais abaixo.
+
+| # | Pergunta (resumo) | Chance | Por quê |
+|---|---|---|---|
+| 1 | Como decide se um processo pede E/S | **Muito alta** | É a primeira coisa que o enunciado pede sobre E/S; quase impossível não perguntar isso de alguma forma |
+| 9 | Como impede um processo bloqueado de ser escolhido de novo | **Muito alta** | Frase mais crítica do enunciado ("não poderá ser escalonado") |
+| 6 | Como funciona a fila de espera na prática | **Muito alta** | Comportamento mais visual e demonstrável; o próprio roteiro de vocês sugere mostrar isso ao vivo |
+| 18 | Como é contado pronto/bloqueado/execução | **Muito alta** | Último parágrafo do enunciado, entrega obrigatória do resultado final |
+| 2 | Como decide qual dispositivo é sorteado | Alta | Extensão direta da pergunta 1, mesma frase do enunciado |
+| 3 | Como decide o momento da fatia em que a E/S ocorre | Alta | Mesma frase do enunciado que a 2 |
+| 12 | O que acontece com os outros processos prontos enquanto um bloqueia | Alta | Frase explícita do enunciado ("devem prosseguir com a execução normalmente") |
+| 10 | Como o processo volta a disputar CPU depois da E/S | Alta | Fecha o ciclo da pergunta 9, mesmo nível de importância |
+| 17 | Por que a pré-simulação do OPT também precisa simular E/S | Alta | O achado mais rico e defensável da sessão (números concretos de quando dá errado), mas é mais avançada que as de cima |
+| 19 | O que garante que pronto + bloqueado + execução bate com o total | Alta | Pergunta natural de aprofundamento da 18 — mas o professor tende a escolher uma das duas, não as duas |
+| 23 | O que aparece na tela a cada troca de processo | Alta | Requisito explícito de exibição, parágrafo inteiro do enunciado dedicado a isso |
+| 4 | O que acontece se o momento sorteado for maior que o tempo restante | Média | Caso de borda rápido e charmoso de perguntar (o tipo de "pegadinha" que professor gosta) |
+| 20 | Fila de espera conta como bloqueado ou outra categoria | Média | Detalhe específico, mas pergunta comum sobre contagem de tempo |
+| 11 | Por que `retirar` é separado de `ao_terminar` | Média | Pergunta boa e reveladora, mas mais arquitetural/demorada de responder bem em pouco tempo |
+| 13 | O que acontece quando ninguém está pronto mas tem gente bloqueada | Média | Caso de borda razoável, mas menos central que os "Tier 1" |
+| 16 | Como memória e E/S se relacionam | Média | Repete parte do conteúdo da pergunta 17 — professor tende a escolher uma das duas |
+| 21 | O que acontece se dois processos pedem o mesmo dispositivo no mesmo instante | Média | Caso de borda mais "filosófico" (resposta é "isso não acontece de verdade") |
+| 22 | O que acontece com zero dispositivos de E/S | Média | Caso de borda de robustez, mas simples de responder |
+| 15 | O que acontece com o `virtual_runtime` do CFS ao bloquear | Baixa | Só é relevante se o grupo estiver demonstrando o CFS especificamente |
+| 5 | Que estruturas representam um dispositivo | Baixa | Pergunta mais sobre "onde" está a informação do que "por quê" a lógica funciona assim |
+| 0 | Visão geral do que a E/S mudou | Baixa | Mais introdução/quebra-gelo do que avaliação de profundidade; com só 4 perguntas o professor tende a ir direto ao ponto |
+| 24 | Painel aparece só na troca real, não no meio do bloqueio | Baixa | Detalhe de interface bem miúdo |
+| 7 | Como o programa sabe quanto falta pra E/S terminar (`io_restante`) | Baixa | Detalhe mecânico específico demais pra uma de só 4 perguntas |
+| 8 | Que campos o `Process` ganhou por causa da E/S | Baixa | Detalhe mecânico, mais "o quê" do que "por quê" |
+| 14 | Por que a Loteria usa Fenwick e o CFS usa árvore rubro-negra | **Muito baixa** | É uma escolha de estrutura de dados do **escalonador**, feita num bimestre anterior — pelo critério do próprio professor ("memória e processos já avaliados"), essa é a mais fora de escopo, a não ser que ele puxe gancho com a 11 |
+
+**Se fosse apostar nas 4 que realmente caem:** 1, 9, 6 e 18 — sozinhas, cobrem quase todo o parágrafo de E/S do enunciado.
