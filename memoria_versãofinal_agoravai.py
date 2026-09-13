@@ -104,7 +104,16 @@ class GerenciadorES:
         for dispositivo in self.dispositivos.values():
             usando = [p.pid for p in dispositivo.em_uso]
             esperando = [p.pid for p in dispositivo.fila]
-            print(f"Dispositivo {dispositivo.identificador}: usando={usando} esperando={esperando}")
+    
+            if not usando:
+                estado = "livre"
+            elif len(usando) < dispositivo.usos_simultaneos:
+                estado = "parcialmente ocupado"
+            else:
+                estado = "ocupado"
+    
+            print(f"Dispositivo {dispositivo.identificador}: "
+                  f"estado={estado} usando={usando} esperando={esperando}")
 
 class Memory:
     """
