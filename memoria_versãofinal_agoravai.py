@@ -99,21 +99,23 @@ class GerenciadorES:
     def escolher_dispositivo(self):
         return random.choice(list(self.dispositivos.values()))
 
-    def imprimir(self, processos):
+    def imprimir(self):
         print("Dispositivos:")
         for dispositivo in self.dispositivos.values():
             usando = [p.pid for p in dispositivo.em_uso]
             esperando = [p.pid for p in dispositivo.fila]
-    
+
             if not usando:
                 estado = "livre"
             elif len(usando) < dispositivo.usos_simultaneos:
                 estado = "parcialmente ocupado"
             else:
                 estado = "ocupado"
-    
-            print(f"Dispositivo {dispositivo.identificador}: "
-                  f"estado={estado} usando={usando} esperando={esperando}")
+
+            rotulo = f"  {dispositivo.identificador} [{estado}]"
+            usando_txt = "[" + ", ".join(f"P{pid}" for pid in usando) + "]"
+            esperando_txt = "[" + ", ".join(f"P{pid}" for pid in esperando) + "]"
+            print(f"{rotulo.ljust(35)} usando={usando_txt}  esperando={esperando_txt}")
 
 class Memory:
     """
@@ -447,17 +449,29 @@ class CPU:
         for processo in prontos:
             self.escalonador.chegada(processo)
 
-    def imprimir_estado(self, atual=None):
-        if atual is not None:
-            print(f"CPU: P{atual.pid} restante={atual.remain_time}")
+    def imprimir_estado(self, atual):
+        titulo = f" t={self.time} — P{atual.pid} assume a CPU "
+        largura = max(70, len(titulo) + 10)
+        esquerda = (largura - len(titulo)) // 2
+        direita = largura - len(titulo) - esquerda
+        print("─" * esquerda + titulo + "─" * direita)
 
         prontos = [p for p in self.processos if p.estado == "pronto"]
         bloqueados = [p for p in self.processos if p.estado == "bloqueado"]
 
-        print("Prontos:", [(p.pid, p.remain_time) for p in prontos])
-        print("Bloqueados:",
-              [(p.pid, p.remain_time, p.dispositivo) for p in bloqueados])
-        self.gerenciador_es.imprimir(self.processos)
+        print(f"Executando : P{atual.pid} (restante={atual.remain_time})")
+        print("Prontos    :", self._formatar_lista(
+            f"P{p.pid}(restante={p.remain_time})" for p in prontos))
+        print("Bloqueados :", self._formatar_lista(
+            f"P{p.pid}(restante={p.remain_time}, {p.dispositivo})" for p in bloqueados))
+        print()
+        self.gerenciador_es.imprimir()
+        print()
+
+    @staticmethod
+    def _formatar_lista(itens):
+        itens = list(itens)
+        return "  ".join(itens) if itens else "(nenhum)"
 
     def executar_processo(self, processo):
         if processo.start_time is None:
@@ -495,7 +509,6 @@ class CPU:
 
             if momento_es is not None and executado == momento_es:
                 self.gerenciador_es.solicitar(processo, dispositivo.identificador)
-                self.imprimir_estado()
                 return executado
 
         processo.estado = "pronto"

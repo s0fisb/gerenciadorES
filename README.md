@@ -16,6 +16,32 @@ python "memoria_versãofinal_agoravai.py" entrada_ES.txt
 
 O primeiro argumento é o arquivo de entrada, no formato descrito abaixo.
 
+# Arquivos de exemplo e verificação
+
+A pasta `testes/` tem entradas prontas para demonstrar casos específicos do
+gerenciador de E/S (fila de espera em dispositivo, uso simultâneo, CPU
+ociosa aguardando E/S, os quatro escalonadores, política de memória global
+etc). Para rodar qualquer uma:
+
+```
+python "memoria_versãofinal_agoravai.py" testes/e2_dispositivo_gargalo.txt
+```
+
+`testes/validar.py` roda todas as entradas de `testes/` (mais
+`entrada_ES.txt`) várias vezes cada — como não há semente fixa, repetir
+aumenta a chance de cobrir cenários de E/S diferentes — e confere as
+invariantes do enunciado a partir da saída (soma de tempos pronto/bloqueado/
+execução batendo com o total, limite de uso simultâneo por dispositivo
+respeitado, processo bloqueado nunca escalonado, etc.):
+
+```
+python testes/validar.py        # 15 repetições por arquivo (padrão)
+python testes/validar.py 40     # mais repetições
+```
+
+Se tudo passar, imprime `TUDO OK`; qualquer violação é reportada com o
+arquivo, a repetição e a linha da saída onde ocorreu.
+
 # Instruções do trabalho 
 > É exatamente igual ao que tá no ava
 
